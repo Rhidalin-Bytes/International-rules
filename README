@@ -1,0 +1,3 @@
+This is an attempt to deal with the problems with sending international
+characters through the !rules command. Still having problems with q3a_rcon
+I'll be looking into actual game communication before proceeding further.
