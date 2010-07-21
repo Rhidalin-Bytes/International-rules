@@ -1,5 +1,11 @@
+# Rules plugin based on original rules contained in admin.py
+# Updated to handle file based rule sets containing ANSI characters
+# Language map will filter characters and make ready for ASCII
+# Recommend ANSI Declaration for B3 to take full advantage of character set
+# 2010-07-14 Rhidalin Bytes - Updated for common language files
+# 2010-07-20 Added ability to send specific rule by language
 
-__version__ = '1.0'
+__version__ = '1.2'
 __author__  = 'Bakes'
 
 import b3, re, threading, sys, thread, string, codecs, time
@@ -10,8 +16,9 @@ import random
 #This lot doesn't need to be changed for simple commands, it gets the admin plugin and registers commands.
 class RulesPlugin(b3.plugin.Plugin):
     _adminPlugin = None
-    file = {}
-    rules = {}
+    files = {}
+	# rulestorage = {idx: 1, lang: 'cryll', number: 1, rule: 'Rule 1 - This is the rule' }
+    rulestorage = {}
 
     def startup(self):
         """\
@@ -28,39 +35,40 @@ class RulesPlugin(b3.plugin.Plugin):
         # register our commands (you can ignore this bit)
         if 'commands' in self.config.sections():
             for cmd in self.config.options('commands'):
+                self.debug('cmd = %s' % cmd)
                 level = self.config.get('commands', cmd)
                 sp = cmd.split('-')
                 alias = None
                 if len(sp) == 2:
                     cmd, alias = sp
-
-            func = self.getCmd(cmd)
-            if func:
-                self._adminPlugin.registerCommand(self, cmd, level, func, alias)
+                
+                func = self.getCmd(cmd)
+                if func:
+                    self._adminPlugin.registerCommand(self, cmd, level, func, alias)
         # find out which language files are available in config and make sure they are there.
         if 'files' in self.config.sections():
             cnt = 1
             for f in self.config.options('files'):
-                self.file[f] = self.config.get('files', f)
-            cnt = len(self.file)
-            self.debug('cnt = %s' % cnt)
-            self.debug(self.file)
-            if self.file:
-                cnt = 1
-                for n in self.file:
+                self.files[f] = self.config.get('files', f)
+            if self.files:
+                idx = 1
+                for n in self.files:
                     self.debug('n = %s' % n)
-                    f = codecs.open(self.file[n], 'r', 'dbcs')
-                    l = f.readline()
-                    repr(l)
-                    while l:
+                    in_file = codecs.open(self.files[n], 'r', 'dbcs')
+                    L = in_file.readline()
+                    repr(L)
+                    number = 1
+                    while L:
                     #for line in f:
-                        self.rules[cnt] = n , l
-                        cnt = cnt + 1
-                        l = f.readline()
+                        self.rulestorage[idx] = n ,number , L
+                        number = number + 1
+                        idx = idx + 1
+                        L = in_file.readline()
+                        repr(L)
                         #l.encode('us-ascii', 'replace')
                         #repr(l)
-                    f.close()
-            #self.debug(self.rules)
+                    in_file.close()
+            self.debug(self.rulestorage)
             #for n in self.rules:
             #    t, u = self.rules[n]
             #    self.debug('rules for %s , %s' % (t, u))
@@ -75,84 +83,88 @@ class RulesPlugin(b3.plugin.Plugin):
             return func
 
         return None
+    def cmd_languages(self, data, client=None, cmd=None):
+        """\
+        - List available rule languages
+        """
+        lang = []
+        for n in self.files:
+            lang.append(n)
+        cmd.sayLoudOrPM(client, string.join(lang, ', '))
 
     def cmd_rules(self, data, client=None, cmd=None):
         """\
-        - say the rules to <target> with option for languages
+        - say the rules with option language or single rule. <target> <language> <rule number> !languages for list
         """
+
         if not self._adminPlugin.aquireCmdLock(cmd, client, 60, True):
             client.message('^7Do not spam commands')
             return
-        lang = None
-        m = self._adminPlugin.parseUserCmd(data)
-        if m:
-            try:
-                if m[0] and not m[1]:
-                    if client.maxLevel >= self._adminPlugin.config.getint('settings', 'admins_level'):
-                        sclient = self._adminPlugin.findClientPrompt(m[0], client)
-                        if not sclient:
-                            return
-
-                        if sclient.maxLevel >= client.maxLevel:
-                            client.message('%s ^7already knows the rules' % sclient.exactName)
-                            return
-                        else:
-                            client.message('^7Sir, Yes Sir!, spamming rules to %s' % sclient.exactName)
-                            thread.start_new_thread(self._sendRules, (sclient,))
+        #if client.maxLevel >= self._adminPlugin.config.getint('settings', 'admins_level'):
+        #   pass
+        #else:
+        #    client.message('^7Stop trying to spam other players')
+        #    return
+           
+        if data:
+            m = self._adminPlugin.parseUserCmd(data)
+            if m[0]:
+                sclient = self._adminPlugin.findClientPrompt(m[0], client)
+        #        if sclient.maxLevel >= client.maxLevel:
+        #            client.message('%s ^7already knows the rules' % sclient.exactName)
+        #            return
+            if m[1]:
+                try:
+                    if m[1] not in self.files:
+                        rule = m[1]
+                        thread.start_new_thread(self._sendRules, (sclient, None, rule))
                     else:
-                        client.message('^7Stop trying to spam other players')
-                        return
-                elif m[1]:
-                    if client.maxLevel >= self._adminPlugin.config.getint('settings', 'admins_level'):
-                        sclient = self._adminPlugin.findClientPrompt(m[0], client)
-                        if not sclient:
-                            return
-                        if sclient.maxLevel >= client.maxLevel:
-                            client.message('%s ^7already knows the rules' % sclient.exactName)
-                            return
-                        else:
-                            client.message('^7Sir, Yes Sir!, spamming rules to %s' % sclient.exactName)
-                            thread.start_new_thread(self._sendRules, (sclient, m[1]))
-                    else:
-                        client.message('^7Stop trying to spam other players')
-                        return
-            except:
-                pass
+                        lr = []
+                        lang, rule = m[1].split(' ')
+                        rule = int(rule)
+                        thread.start_new_thread(self._sendRules, (sclient, lang, rule))
+                except:
+                    lang = m[1]
+                    thread.start_new_thread(self._sendRules, (sclient, lang))
+            else:
+                thread.start_new_thread(self._sendRules, (sclient,))
         elif cmd.loud:
             thread.start_new_thread(self._sendRules, (None,))
-            return
         else:
             sclient = client
             thread.start_new_thread(self._sendRules, (sclient,))
 
-    def _sendRules(self, sclient, lang='cryll'):
+
+    def _sendRules(self, sclient, lang=None, rule=None ):
         rus = []
         if not lang:
-            #for i in range(1, 20):
-            #    try:
-            #        rule = self.config.getTextTemplate('spamages', 'rule%s' % i)
-            #        rus.append(rule)
-            #    except:
-            #        break
-            for n in self.rules:
-                l , t = self.rules[n]
+            if rule:
+                rus.append(self._adminPlugin.config.getTextTemplate('spamages', 'rule%s' % rule))
+            else:
+                for i in range(1, 20):
+                    try:
+                        xmlrule = self._adminPlugin.config.getTextTemplate('spamages', 'rule%s' % i)
+                        rus.append(xmlrule)
+                    except:
+                        break
+        elif not rule:
+            for n in self.rulestorage:
+                l ,r, t = self.rulestorage[n]
+                fix = t.encode('us-ascii', 'replace')
                 if l == lang:
-                    rus.append(t)
-
+                    rus.append(fix.replace('?', ''))
         else:
-            for n in self.rules:
-                l , t = self.rules[n]
-                a = t.encode('us-ascii', 'replace')
-                a.replace('?', '')
-                if l == lang:
-                    rus.append(a)
-            #add lines as rule in rules
-            #close text file
+            for n in self.rulestorage:
+                l ,r ,t = self.rulestorage[n]
+                fix = t.encode('us-ascii', 'replace')
+                if l == lang and r == rule:
+                    rus.append(fix.replace('?', ''))
         if sclient:
-            for rule in rus:
-                sclient.message(rule)
+            client = sclient
+            for rl in rus:
+                client.message(rl)
                 time.sleep(1)
         else:
-            for rule in rus:
-                self.console.say(rule)
+            for rl in rus:
+                self.console.say(rl)
                 time.sleep(1)
