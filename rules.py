@@ -8,12 +8,9 @@
 __version__ = '1.2'
 __author__  = 'Bakes'
 
-import b3, re, threading, sys, thread, string, codecs, time
+import b3, re, sys, thread, string, codecs, time
 import b3.events
-# Import the necessary libaries you need here, for example, I need random for the randomization of answers part of it.
-import random
 #--------------------------------------------------------------------------------------------------
-#This lot doesn't need to be changed for simple commands, it gets the admin plugin and registers commands.
 class RulesPlugin(b3.plugin.Plugin):
     _adminPlugin = None
     files = {}
@@ -35,7 +32,6 @@ class RulesPlugin(b3.plugin.Plugin):
         # register our commands (you can ignore this bit)
         if 'commands' in self.config.sections():
             for cmd in self.config.options('commands'):
-                self.debug('cmd = %s' % cmd)
                 level = self.config.get('commands', cmd)
                 sp = cmd.split('-')
                 alias = None
@@ -53,25 +49,17 @@ class RulesPlugin(b3.plugin.Plugin):
             if self.files:
                 idx = 1
                 for n in self.files:
-                    self.debug('n = %s' % n)
                     in_file = codecs.open(self.files[n], 'r', 'dbcs')
                     L = in_file.readline()
                     repr(L)
                     number = 1
                     while L:
-                    #for line in f:
                         self.rulestorage[idx] = n ,number , L
                         number = number + 1
                         idx = idx + 1
                         L = in_file.readline()
                         repr(L)
-                        #l.encode('us-ascii', 'replace')
-                        #repr(l)
                     in_file.close()
-            self.debug(self.rulestorage)
-            #for n in self.rules:
-            #    t, u = self.rules[n]
-            #    self.debug('rules for %s , %s' % (t, u))
 
         self.debug('Started')
 
@@ -100,19 +88,19 @@ class RulesPlugin(b3.plugin.Plugin):
         if not self._adminPlugin.aquireCmdLock(cmd, client, 60, True):
             client.message('^7Do not spam commands')
             return
-        #if client.maxLevel >= self._adminPlugin.config.getint('settings', 'admins_level'):
-        #   pass
-        #else:
-        #    client.message('^7Stop trying to spam other players')
-        #    return
+        if client.maxLevel >= self._adminPlugin.config.getint('settings', 'admins_level'):
+           pass
+        else:
+            client.message('^7Stop trying to spam other players')
+            return
            
         if data:
             m = self._adminPlugin.parseUserCmd(data)
             if m[0]:
                 sclient = self._adminPlugin.findClientPrompt(m[0], client)
-        #        if sclient.maxLevel >= client.maxLevel:
-        #            client.message('%s ^7already knows the rules' % sclient.exactName)
-        #            return
+                if sclient.maxLevel >= client.maxLevel:
+                    client.message('%s ^7already knows the rules' % sclient.exactName)
+                    return
             if m[1]:
                 try:
                     if m[1] not in self.files:
