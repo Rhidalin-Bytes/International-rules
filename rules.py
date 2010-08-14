@@ -4,6 +4,8 @@
 # Recommend ANSI Declaration for B3 to take full advantage of character set
 # 2010-07-14 Rhidalin Bytes - Updated for common language files
 # 2010-07-20 Added ability to send specific rule by language
+# 2010-08-13 Admin notified of rules success
+#            Single rules available similar to spam
 
 __version__ = '1.2'
 __author__  = 'Bakes'
@@ -96,21 +98,23 @@ class RulesPlugin(b3.plugin.Plugin):
            
         if data:
             m = self._adminPlugin.parseUserCmd(data)
-            if m[0]:
+            if m[0] not in self.files:
                 sclient = self._adminPlugin.findClientPrompt(m[0], client)
                 if sclient.maxLevel >= client.maxLevel:
                     client.message('%s ^7already knows the rules' % sclient.exactName)
                     return
+            else:
+                thread.start_new_thread(self._sendRules, (None, lang, rule))
             if m[1]:
                 try:
                     if m[1] not in self.files:
                         rule = m[1]
                         thread.start_new_thread(self._sendRules, (sclient, None, rule))
                     else:
-                        lr = []
                         lang, rule = m[1].split(' ')
-                        rule = int(rule)
-                        thread.start_new_thread(self._sendRules, (sclient, lang, rule))
+                        if lang in self.file:
+                            rule = int(rule)
+                            thread.start_new_thread(self._sendRules, (sclient, lang, rule))
                 except:
                     lang = m[1]
                     thread.start_new_thread(self._sendRules, (sclient, lang))
@@ -121,6 +125,7 @@ class RulesPlugin(b3.plugin.Plugin):
         else:
             sclient = client
             thread.start_new_thread(self._sendRules, (sclient,))
+        client.message('Yes sir, spamming the rule(s) to %s' % sclient.exactName)
 
 
     def _sendRules(self, sclient, lang=None, rule=None ):
